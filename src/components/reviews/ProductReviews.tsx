@@ -243,7 +243,7 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
     { k: "stretch", l: "Stretchability", icon: <MoveHorizontal className="h-4 w-4" /> },
     { k: "durability", l: "Durability after washing", icon: <WashingMachine className="h-4 w-4" /> },
   ];
-  const goodBad = [{ v: "good" as Level, l: "Good / High" }, { v: "bad" as Level, l: "Poor / Low" }];
+  const goodBad: { v: Level; l: string }[] = [{ v: "good", l: "Good / High" }, { v: "bad", l: "Poor / Low" }];
 
   return (
     <form onSubmit={submit} className="space-y-7 rounded-xl border border-border bg-card p-6 md:p-8">
@@ -264,7 +264,7 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
       <div className="grid gap-6 md:grid-cols-2">
         <div>
           <SectionLabel icon={<Ruler className="h-3.5 w-3.5" />} hint="(optional)">Fit</SectionLabel>
-          <Segmented options={[{ v: "small" as Fit, l: "Too Small" }, { v: "true" as Fit, l: "True to Size" }, { v: "large" as Fit, l: "Too Large" }]}
+          <Segmented<Fit> options={[{ v: "small" as Fit, l: "Too Small" }, { v: "true" as Fit, l: "True to Size" }, { v: "large" as Fit, l: "Too Large" }]}
             value={f.fit} onChange={(v) => set("fit", v)} />
         </div>
         <div>
@@ -292,11 +292,11 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
       <div className="grid gap-6 md:grid-cols-2">
         <div>
           <SectionLabel hint="(optional)">Material quality</SectionLabel>
-          <Segmented options={goodBad} value={f.material} onChange={(v) => set("material", v)} />
+          <Segmented<Level> options={goodBad} value={f.material} onChange={(v) => set("material", v)} />
         </div>
         <div>
           <SectionLabel hint="(optional)">Color accuracy & quality</SectionLabel>
-          <Segmented options={goodBad} value={f.color} onChange={(v) => set("color", v)} />
+          <Segmented<Level> options={goodBad} value={f.color} onChange={(v) => set("color", v)} />
         </div>
       </div>
 
