@@ -553,6 +553,8 @@ export function ProductReviews({ initialReviews = SEED, currentUser = null }: { 
   const [showForm, setShowForm] = useState(false);
   const [sort, setSort] = useState<"recent" | "high" | "low" | "helpful">("recent");
   const [filter, setFilter] = useState(0);
+  const [photosOnly, setPhotosOnly] = useState(false);
+  const [sizeFilter, setSizeFilter] = useState("");
   const [reporting, setReporting] = useState<Review | null>(null);
   const [adminMode, setAdminMode] = useState(false);
   const [guestId] = useState(() => "guest-" + uid());
@@ -561,11 +563,22 @@ export function ProductReviews({ initialReviews = SEED, currentUser = null }: { 
   const viewerName = currentUser?.name ?? guestName;
 
   const visible = useMemo(() => {
-    const list = filter ? reviews.filter((r) => r.rating === filter) : [...reviews];
+    const list = reviews.filter((r) =>
+      (!filter || r.rating === filter) &&
+      (!photosOnly || r.images.length > 0) &&
+      (!sizeFilter || (r.bio.size ?? "").trim().toUpperCase() === sizeFilter));
     return list.sort((a, b) =>
       sort === "high" ? b.rating - a.rating : sort === "low" ? a.rating - b.rating
         : sort === "helpful" ? b.helpful - a.helpful : b.date.localeCompare(a.date));
-  }, [reviews, sort, filter]);
+  }, [reviews, sort, filter, photosOnly, sizeFilter]);
+  const sizes = useMemo(() => {
+    const order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+    const set = Array.from(new Set(reviews.map((r) => (r.bio.size ?? "").trim().toUpperCase()).filter(Boolean)));
+    return set.sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    });
+  }, [reviews]);
 
   const update = (id: string, fn: (r: Review) => Review) => setReviews((p) => p.map((r) => (r.id === id ? fn(r) : r)));
 
@@ -600,6 +613,16 @@ export function ProductReviews({ initialReviews = SEED, currentUser = null }: { 
               {s ? `${s}★` : "All"}
             </button>
           ))}
+          <button onClick={() => setPhotosOnly((v) => !v)}
+            className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition",
+              photosOnly ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground")}>
+            With photos
+          </button>
+          <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)} aria-label="Filter by size"
+            className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground outline-none focus:border-ring">
+            <option value="">All sizes</option>
+            {sizes.map((s) => <option key={s} value={s}>Size {s}</option>)}
+          </select>
         </div>
         <div className="relative">
           <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}
