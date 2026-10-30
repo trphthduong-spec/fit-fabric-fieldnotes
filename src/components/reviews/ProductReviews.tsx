@@ -101,7 +101,7 @@ function StarInput({ value, onChange, size = 28, label }: { value: number; onCha
   );
 }
 
-function Segmented<T extends string>({ options, value, onChange }: { options: { v: T; l: string }[]; value?: T; onChange: (v?: T) => void }) {
+function Segmented<T extends string>({ options, value, onChange }: { options: { v: T; l: string }[]; value: T | undefined; onChange: (v: T | undefined) => void }) {
   return (
     <div className="inline-flex w-full rounded-md border border-input bg-muted p-1">
       {options.map((o) => (
@@ -137,7 +137,7 @@ function SectionLabel({ icon, children, hint }: { icon?: ReactNode; children: Re
 const inputCls = "w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20";
 
 function FitScale({ fit }: { fit: Fit }) {
-  const pos = { small: "0%", true: "50%", large: "100%" }[fit];
+  const pos = ({ small: "0%", true: "50%", large: "100%" } as Record<Fit, string>)[fit];
   return (
     <div className="w-full max-w-xs">
       <div className="relative h-1.5 rounded-full bg-accent">
