@@ -243,7 +243,8 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
     { k: "stretch", l: "Stretchability", icon: <MoveHorizontal className="h-4 w-4" /> },
     { k: "durability", l: "Durability after washing", icon: <WashingMachine className="h-4 w-4" /> },
   ];
-  const goodBad: { v: Level; l: string }[] = [{ v: "good", l: "Good / High" }, { v: "bad", l: "Poor / Low" }];
+  const materialOpts: { v: Level; l: string }[] = [{ v: "good", l: "High quality" }, { v: "bad", l: "Low quality" }];
+  const colorOpts: { v: Level; l: string }[] = [{ v: "good", l: "Accurate" }, { v: "bad", l: "Not as pictured" }];
 
   return (
     <form onSubmit={submit} className="space-y-7 rounded-xl border border-border bg-card p-6 md:p-8">
@@ -292,11 +293,11 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
       <div className="grid gap-6 md:grid-cols-2">
         <div>
           <SectionLabel hint="(optional)">Material quality</SectionLabel>
-          <Segmented<Level> options={goodBad} value={f.material} onChange={(v) => set("material", v)} />
+          <Segmented<Level> options={materialOpts} value={f.material} onChange={(v) => set("material", v)} />
         </div>
         <div>
-          <SectionLabel hint="(optional)">Color accuracy & quality</SectionLabel>
-          <Segmented<Level> options={goodBad} value={f.color} onChange={(v) => set("color", v)} />
+          <SectionLabel hint="(optional)">Color vs. photos</SectionLabel>
+          <Segmented<Level> options={colorOpts} value={f.color} onChange={(v) => set("color", v)} />
         </div>
       </div>
 
