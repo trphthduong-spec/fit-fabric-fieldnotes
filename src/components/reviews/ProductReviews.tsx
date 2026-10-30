@@ -213,7 +213,7 @@ function Summary({ reviews, onWrite, filter, setFilter }: { reviews: Review[]; o
 type FormState = Omit<Review, "id" | "date" | "helpful" | "replies" | "verified" | "authorId">;
 const emptyForm = (): FormState => ({ name: "", rating: 0, title: "", comment: "", images: [], fabric: {}, bio: {}, shipper: [] });
 
-function ReviewForm({ onSubmit, onCancel, signedInName, defaultName = "" }: { onSubmit: (f: FormState) => void; onCancel: () => void; signedInName?: string; defaultName?: string }) {
+function ReviewForm({ onSubmit, onCancel, signedInName, defaultName = "" }: { onSubmit: (f: FormState) => void; onCancel: () => void; signedInName?: string | undefined; defaultName?: string }) {
   const [f, setF] = useState<FormState>(() => ({ ...emptyForm(), name: defaultName }));
   const [err, setErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
