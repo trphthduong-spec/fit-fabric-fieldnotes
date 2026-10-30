@@ -171,7 +171,7 @@ function Summary({ reviews, onWrite, filter, setFilter }: { reviews: Review[]; o
       </div>
       <div className="space-y-2">
         {[5, 4, 3, 2, 1].map((s, i) => {
-          const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+          const pct = total ? Math.round(((counts[i] ?? 0) / total) * 100) : 0;
           return (
             <button key={s} onClick={() => setFilter(filter === s ? 0 : s)}
               className={cn("flex w-full items-center gap-3 rounded px-1 py-0.5 text-sm transition hover:bg-muted", filter === s && "bg-muted")}>
