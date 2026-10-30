@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Star, BadgeCheck, ThumbsUp, Flag, MessageSquare, ImagePlus, X, Ruler, Wind, MoveHorizontal,
-  WashingMachine, Truck, Shirt, ShieldCheck, ChevronDown, Send,
+  WashingMachine, Truck, Shirt, ShieldCheck, ChevronDown, Send, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -12,10 +12,11 @@ import { cn } from "@/lib/utils";
 /* ---------- Types ---------- */
 export type Fit = "small" | "true" | "large";
 export type Level = "good" | "bad";
-type Reply = { id: string; author: string; isAdmin: boolean; text: string; date: string };
+type Reply = { id: string; author: string; authorId?: string; isAdmin: boolean; text: string; date: string };
 export type Review = {
   id: string;
   name: string;
+  authorId?: string;
   verified: boolean;
   rating: number;
   date: string;
@@ -209,11 +210,11 @@ function Summary({ reviews, onWrite, filter, setFilter }: { reviews: Review[]; o
 }
 
 /* ---------- Form ---------- */
-type FormState = Omit<Review, "id" | "date" | "helpful" | "replies" | "verified">;
+type FormState = Omit<Review, "id" | "date" | "helpful" | "replies" | "verified" | "authorId">;
 const emptyForm = (): FormState => ({ name: "", rating: 0, title: "", comment: "", images: [], fabric: {}, bio: {}, shipper: [] });
 
-function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; onCancel: () => void }) {
-  const [f, setF] = useState<FormState>(emptyForm);
+function ReviewForm({ onSubmit, onCancel, signedInName, defaultName = "" }: { onSubmit: (f: FormState) => void; onCancel: () => void; signedInName?: string | undefined; defaultName?: string }) {
+  const [f, setF] = useState<FormState>(() => ({ ...emptyForm(), name: defaultName }));
   const [err, setErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
@@ -319,7 +320,9 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
 
       <div className="grid gap-4">
         <SectionLabel hint="(optional)">Your review</SectionLabel>
-        <input className={inputCls} placeholder="Your name (defaults to Anonymous)" value={f.name} onChange={(e) => set("name", e.target.value)} />
+        {signedInName
+          ? <p className="text-xs text-muted-foreground">Posting as <span className="font-semibold text-foreground">{signedInName}</span></p>
+          : <input className={inputCls} placeholder="Display name (defaults to Anonymous)" maxLength={40} value={f.name} onChange={(e) => set("name", e.target.value)} />}
         <input className={inputCls} placeholder="Review title" value={f.title} onChange={(e) => set("title", e.target.value)} />
         <textarea className={cn(inputCls, "min-h-28")} placeholder="Tell us about your experience…" value={f.comment} onChange={(e) => set("comment", e.target.value)} />
       </div>
@@ -355,11 +358,13 @@ function ReviewForm({ onSubmit, onCancel }: { onSubmit: (f: FormState) => void; 
 }
 
 /* ---------- Card ---------- */
-function ReviewCard({ r, onHelpful, onReply, onReport, isAdminMode }: {
-  r: Review; onHelpful: () => void; onReply: (text: string) => void; onReport: () => void; isAdminMode: boolean;
+function ReviewCard({ r, onHelpful, onReply, onReport, onDeleteReview, onDeleteReply, isAdminMode, viewerId, viewerName }: {
+  r: Review; onHelpful: (delta: number) => void; onReply: (text: string, name: string) => void; onReport: () => void;
+  onDeleteReview: () => void; onDeleteReply: (id: string) => void; isAdminMode: boolean; viewerId: string; viewerName: string;
 }) {
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState("");
+  const [nameDraft, setNameDraft] = useState("");
   const [voted, setVoted] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const fabric = [
@@ -427,12 +432,16 @@ function ReviewCard({ r, onHelpful, onReply, onReport, isAdminMode }: {
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         <span>Was this helpful?</span>
-        <button disabled={voted} onClick={() => { setVoted(true); onHelpful(); }}
-          className={cn("inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-medium transition hover:bg-muted", voted && "border-primary text-foreground")}>
-          <ThumbsUp className="h-3.5 w-3.5" />Yes ({r.helpful})
+        <button aria-pressed={voted} title={voted ? "Tap again to undo" : undefined}
+          onClick={() => { onHelpful(voted ? -1 : 1); setVoted(!voted); }}
+          className={cn("inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-medium transition hover:bg-muted", voted && "border-primary bg-primary text-primary-foreground hover:bg-primary/90")}>
+          <ThumbsUp className={cn("h-3.5 w-3.5", voted && "fill-current")} />Yes ({r.helpful})
         </button>
         <button onClick={() => setReplying((v) => !v)} className="inline-flex items-center gap-1 hover:text-foreground"><MessageSquare className="h-3.5 w-3.5" />Reply</button>
         <button onClick={onReport} className="inline-flex items-center gap-1 hover:text-destructive"><Flag className="h-3.5 w-3.5" />Report</button>
+        {(r.authorId === viewerId || isAdminMode) && (
+          <button onClick={() => { if (confirm("Delete this review? This can't be undone.")) onDeleteReview(); }} className="inline-flex items-center gap-1 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />Delete</button>
+        )}
       </div>
 
       {(r.replies.length > 0 || replying) && (
@@ -441,20 +450,37 @@ function ReviewCard({ r, onHelpful, onReply, onReport, isAdminMode }: {
             <div key={rep.id} className={cn("rounded-md p-3", rep.isAdmin ? "border border-admin/20 bg-accent" : "bg-muted/60")}>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">{rep.author}</span>
+                {rep.authorId === viewerId && !rep.isAdmin && <span className="text-xs text-muted-foreground">(you)</span>}
                 {rep.isAdmin && (
                   <span className="inline-flex items-center gap-1 rounded bg-admin px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-widest text-admin-foreground">
                     <ShieldCheck className="h-3 w-3" />Shop Admin
                   </span>
                 )}
                 <span className="text-xs text-muted-foreground">{fmtDate(rep.date)}</span>
+                {(rep.authorId === viewerId || isAdminMode) && (
+                  <button aria-label="Delete reply" onClick={() => { if (confirm("Delete this reply? This can't be undone.")) onDeleteReply(rep.id); }}
+                    className="ml-auto text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{rep.text}</p>
             </div>
           ))}
           {replying && (
-            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; onReply(text.trim()); setText(""); setReplying(false); }}>
-              <input autoFocus className={inputCls} placeholder={isAdminMode ? "Reply as Shop Admin…" : "Write a reply…"} value={text} onChange={(e) => setText(e.target.value)} />
-              <button type="submit" aria-label="Send reply" className="rounded-md bg-primary px-3 text-primary-foreground hover:opacity-90"><Send className="h-4 w-4" /></button>
+            <form className="space-y-2" onSubmit={(e) => {
+              e.preventDefault();
+              const n = (isAdminMode ? "Store Team" : viewerName || nameDraft).trim();
+              if (!n) { toast.error("Please enter a display name."); return; }
+              if (!text.trim()) return;
+              onReply(text.trim(), n); setText(""); setReplying(false);
+            }}>
+              {!isAdminMode && !viewerName && (
+                <input className={inputCls} placeholder="Your display name" maxLength={40} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
+              )}
+              {!isAdminMode && viewerName && <p className="text-xs text-muted-foreground">Replying as <span className="font-semibold text-foreground">{viewerName}</span></p>}
+              <div className="flex gap-2">
+                <input autoFocus className={inputCls} placeholder={isAdminMode ? "Reply as Shop Admin…" : "Write a reply…"} value={text} onChange={(e) => setText(e.target.value)} />
+                <button type="submit" aria-label="Send reply" className="rounded-md bg-primary px-3 text-primary-foreground hover:opacity-90"><Send className="h-4 w-4" /></button>
+              </div>
             </form>
           )}
         </div>
@@ -516,13 +542,23 @@ function ReportDialog({ review, onClose }: { review: Review | null; onClose: () 
 }
 
 /* ---------- Main ---------- */
-export function ProductReviews({ initialReviews = SEED }: { initialReviews?: Review[] }) {
+export type ReviewUser = { id: string; name: string };
+
+/**
+ * Pass `currentUser` from your login system (e.g. { id: user.id, name: profile.username }).
+ * When signed in, their username is used automatically. Guests are asked for a display name once.
+ */
+export function ProductReviews({ initialReviews = SEED, currentUser = null }: { initialReviews?: Review[]; currentUser?: ReviewUser | null }) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews);
   const [showForm, setShowForm] = useState(false);
   const [sort, setSort] = useState<"recent" | "high" | "low" | "helpful">("recent");
   const [filter, setFilter] = useState(0);
   const [reporting, setReporting] = useState<Review | null>(null);
   const [adminMode, setAdminMode] = useState(false);
+  const [guestId] = useState(() => "guest-" + uid());
+  const [guestName, setGuestName] = useState("");
+  const viewerId = currentUser?.id ?? guestId;
+  const viewerName = currentUser?.name ?? guestName;
 
   const visible = useMemo(() => {
     const list = filter ? reviews.filter((r) => r.rating === filter) : [...reviews];
@@ -546,8 +582,10 @@ export function ProductReviews({ initialReviews = SEED }: { initialReviews?: Rev
       <Summary reviews={reviews} onWrite={() => setShowForm(true)} filter={filter} setFilter={setFilter} />
 
       {showForm && (
-        <ReviewForm onCancel={() => setShowForm(false)} onSubmit={(f) => {
-          setReviews((p) => [{ ...f, name: f.name.trim() || "Anonymous", id: uid(), date: today(), helpful: 0, verified: true, replies: [] }, ...p]);
+        <ReviewForm signedInName={currentUser?.name} defaultName={guestName} onCancel={() => setShowForm(false)} onSubmit={(f) => {
+          const name = currentUser?.name || f.name.trim() || "Anonymous";
+          if (!currentUser && f.name.trim()) setGuestName(f.name.trim());
+          setReviews((p) => [{ ...f, name, authorId: viewerId, id: uid(), date: today(), helpful: 0, verified: true, replies: [] }, ...p]);
           setShowForm(false); setSort("recent"); setFilter(0);
           toast.success("Thanks! Your review is live.");
         }} />
@@ -577,12 +615,17 @@ export function ProductReviews({ initialReviews = SEED }: { initialReviews?: Rev
 
       <div>
         {visible.length ? visible.map((r) => (
-          <ReviewCard key={r.id} r={r} isAdminMode={adminMode}
-            onHelpful={() => update(r.id, (x) => ({ ...x, helpful: x.helpful + 1 }))}
+          <ReviewCard key={r.id} r={r} isAdminMode={adminMode} viewerId={viewerId} viewerName={viewerName}
+            onHelpful={(delta) => update(r.id, (x) => ({ ...x, helpful: Math.max(0, x.helpful + delta) }))}
             onReport={() => setReporting(r)}
-            onReply={(text) => update(r.id, (x) => ({
-              ...x, replies: [...x.replies, { id: uid(), text, date: today(), isAdmin: adminMode, author: adminMode ? "Store Team" : "You" }],
-            }))} />
+            onDeleteReview={() => { setReviews((p) => p.filter((x) => x.id !== r.id)); toast.success("Review deleted."); }}
+            onDeleteReply={(rid) => { update(r.id, (x) => ({ ...x, replies: x.replies.filter((y) => y.id !== rid) })); toast.success("Reply deleted."); }}
+            onReply={(text, name) => {
+              if (!currentUser && !adminMode) setGuestName(name);
+              update(r.id, (x) => ({
+                ...x, replies: [...x.replies, { id: uid(), text, date: today(), isAdmin: adminMode, authorId: viewerId, author: adminMode ? "Store Team" : name }],
+              }));
+            }} />
         )) : <p className="py-12 text-center text-sm text-muted-foreground">No reviews match this filter.</p>}
       </div>
 
