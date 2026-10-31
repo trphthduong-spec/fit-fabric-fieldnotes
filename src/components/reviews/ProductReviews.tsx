@@ -624,8 +624,8 @@ export function ProductReviews({ initialReviews = SEED, currentUser = null, prod
       (!photosOnly || r.images.length > 0) &&
       (!sizeFilter || (r.bio.size ?? "").trim().toUpperCase() === sizeFilter));
     return list.sort((a, b) => Number(!!b.announcement) - Number(!!a.announcement) ||
-      sort === "high" ? b.rating - a.rating : sort === "low" ? a.rating - b.rating
-        : sort === "helpful" ? b.helpful - a.helpful : b.date.localeCompare(a.date));
+      (sort === "high" ? b.rating - a.rating : sort === "low" ? a.rating - b.rating
+        : sort === "helpful" ? b.helpful - a.helpful : b.date.localeCompare(a.date)));
   }, [reviews, sort, filter, photosOnly, sizeFilter]);
   const sizes = useMemo(() => {
     const order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
