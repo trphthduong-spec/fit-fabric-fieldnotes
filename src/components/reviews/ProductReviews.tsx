@@ -154,7 +154,7 @@ function FitScale({ fit }: { fit: Fit }) {
 }
 
 /* ---------- Summary ---------- */
-function Summary({ reviews: all, onWrite, filter, setFilter }: { reviews: Review[]; onWrite: () => void; filter: number; setFilter: (n: number) => void }) {
+function Summary({ reviews: all, onWrite, writeLabel, filter, setFilter }: { reviews: Review[]; onWrite: () => void; writeLabel?: string | undefined; filter: number; setFilter: (n: number) => void }) {
   const reviews = all.filter((r) => !r.announcement);
   const total = reviews.length;
   const avg = total ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
@@ -170,7 +170,7 @@ function Summary({ reviews: all, onWrite, filter, setFilter }: { reviews: Review
         <div className="mt-2"><Stars value={avg} size={18} /></div>
         <p className="mt-2 text-sm text-muted-foreground">Based on {total} review{total !== 1 && "s"}</p>
         <button onClick={onWrite} className="mt-5 w-full rounded-md bg-primary px-4 py-2.5 font-display text-sm font-bold uppercase tracking-widest text-primary-foreground transition hover:opacity-90">
-          Write a review
+          {writeLabel ?? "Write a review"}
         </button>
       </div>
       <div className="space-y-2">
