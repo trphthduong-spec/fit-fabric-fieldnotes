@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Star, BadgeCheck, ThumbsUp, Flag, MessageSquare, ImagePlus, X, Ruler, Wind, MoveHorizontal,
-  WashingMachine, Truck, Shirt, ShieldCheck, ChevronDown, Send, Trash2,
+  WashingMachine, Truck, Shirt, ShieldCheck, ChevronDown, Send, Trash2, Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,8 @@ export type Review = {
   color?: Level;
   shipper: string[];
   replies: Reply[];
+  /** Shop-admin announcement: no rating, never counted in scores. */
+  announcement?: boolean;
 };
 
 const FIT_LABEL: Record<Fit, string> = { small: "Too Small", true: "True to Size", large: "Too Large" };
@@ -152,7 +154,8 @@ function FitScale({ fit }: { fit: Fit }) {
 }
 
 /* ---------- Summary ---------- */
-function Summary({ reviews, onWrite, filter, setFilter }: { reviews: Review[]; onWrite: () => void; filter: number; setFilter: (n: number) => void }) {
+function Summary({ reviews: all, onWrite, filter, setFilter }: { reviews: Review[]; onWrite: () => void; filter: number; setFilter: (n: number) => void }) {
+  const reviews = all.filter((r) => !r.announcement);
   const total = reviews.length;
   const avg = total ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
   const counts = [5, 4, 3, 2, 1].map((s) => reviews.filter((r) => r.rating === s).length);
@@ -374,7 +377,7 @@ function ReviewCard({ r, onHelpful, onReply, onReport, onDeleteReview, onDeleteR
   const hasMetrics = r.fit || fabric.length || bio.length || r.material || r.color || r.shipper.length;
 
   return (
-    <article className="border-b border-border py-7 last:border-0">
+    <article className={cn("border-b border-border py-7 last:border-0", r.announcement && "-mx-4 rounded-lg border border-admin/20 bg-accent px-4")}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-display text-lg font-bold text-primary-foreground">
@@ -383,9 +386,10 @@ function ReviewCard({ r, onHelpful, onReply, onReport, onDeleteReview, onDeleteR
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{r.name}</span>
-              {r.verified && <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><BadgeCheck className="h-3.5 w-3.5" />Verified buyer</span>}
+              {r.announcement && <span className="inline-flex items-center gap-1 rounded-sm bg-admin px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-admin-foreground"><ShieldCheck className="h-3 w-3" />Shop Admin</span>}
+              {r.verified && !r.announcement && <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><BadgeCheck className="h-3.5 w-3.5" />Verified buyer</span>}
             </div>
-            <div className="mt-0.5 flex items-center gap-2"><Stars value={r.rating} size={14} /><span className="text-xs text-muted-foreground">{fmtDate(r.date)}</span></div>
+            <div className="mt-0.5 flex items-center gap-2">{r.announcement ? <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Megaphone className="h-3.5 w-3.5" />Announcement</span> : <Stars value={r.rating} size={14} />}<span className="text-xs text-muted-foreground">{fmtDate(r.date)}</span></div>
           </div>
         </div>
         {bio.length > 0 && <div className="flex flex-wrap gap-1.5">{bio.map((b) => <Chip key={b as string}>{b}</Chip>)}</div>}
@@ -541,33 +545,85 @@ function ReportDialog({ review, onClose }: { review: Review | null; onClose: () 
   );
 }
 
+/* ---------- Announcement form (admins only) ---------- */
+function AnnouncementForm({ onSubmit, onCancel }: { onSubmit: (title: string, text: string) => void; onCancel: () => void }) {
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  return (
+    <form className="space-y-3 rounded-lg border border-admin/20 bg-card p-6 shadow-sm"
+      onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return toast.error("Write a message first."); onSubmit(title.trim(), text.trim()); }}>
+      <div className="flex items-center gap-2"><Megaphone className="h-5 w-5" /><h3 className="font-display text-xl font-bold uppercase tracking-wide">Post an announcement</h3></div>
+      <p className="text-sm text-muted-foreground">Shown at the top with a Shop Admin badge. No rating — it won't affect the score.</p>
+      <input className={inputCls} placeholder="Title (optional)" maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} />
+      <textarea autoFocus className={cn(inputCls, "min-h-24")} placeholder="e.g. Restock of size M arriving next week…" value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted">Cancel</button>
+        <button type="submit" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Post</button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------- Storage ---------- */
+/**
+ * Where reviews are saved. Swap in your own (e.g. Supabase) on the live site.
+ * `load` returns null when nothing is saved yet (seed reviews are shown instead).
+ */
+export type ReviewStore = {
+  load: () => Promise<Review[] | null>;
+  save: (reviews: Review[]) => Promise<void>;
+};
+
+export const localReviewStore = (key: string): ReviewStore => ({
+  load: async () => {
+    try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as Review[]) : null; } catch { return null; }
+  },
+  save: async (reviews) => { localStorage.setItem(key, JSON.stringify(reviews)); },
+});
+
 /* ---------- Main ---------- */
-export type ReviewUser = { id: string; name: string };
+export type ReviewUser = { id: string; name: string; isAdmin?: boolean };
 
 /**
  * Pass `currentUser` from your login system (e.g. { id: user.id, name: profile.username }).
  * When signed in, their username is used automatically. Guests are asked for a display name once.
  */
-export function ProductReviews({ initialReviews = SEED, currentUser = null }: { initialReviews?: Review[]; currentUser?: ReviewUser | null }) {
-  const [reviews, setReviews] = useState<Review[]>(initialReviews);
+export function ProductReviews({ initialReviews = SEED, currentUser = null, productId = "demo-product", store }: {
+  initialReviews?: Review[]; currentUser?: ReviewUser | null; productId?: string; store?: ReviewStore;
+}) {
+  const [reviews, setReviewsState] = useState<Review[]>(initialReviews);
+  const storeRef = useRef<ReviewStore | null>(null);
+  const loaded = useRef(false);
+  useEffect(() => {
+    const st = store ?? localReviewStore(`product-reviews:${productId}`);
+    storeRef.current = st;
+    loaded.current = false;
+    st.load().then((saved) => { if (saved) setReviewsState(saved); loaded.current = true; })
+      .catch(() => { loaded.current = true; });
+  }, [store, productId]);
+  const setReviews = (fn: (p: Review[]) => Review[]) => setReviewsState((p) => {
+    const next = fn(p);
+    if (loaded.current) storeRef.current?.save(next).catch(() => toast.error("Couldn't save — your change may be lost on refresh."));
+    return next;
+  });
   const [showForm, setShowForm] = useState(false);
   const [sort, setSort] = useState<"recent" | "high" | "low" | "helpful">("recent");
   const [filter, setFilter] = useState(0);
   const [photosOnly, setPhotosOnly] = useState(false);
   const [sizeFilter, setSizeFilter] = useState("");
   const [reporting, setReporting] = useState<Review | null>(null);
-  const [adminMode, setAdminMode] = useState(false);
+  const adminMode = !!currentUser?.isAdmin;
   const [guestId] = useState(() => "guest-" + uid());
   const [guestName, setGuestName] = useState("");
   const viewerId = currentUser?.id ?? guestId;
   const viewerName = currentUser?.name ?? guestName;
 
   const visible = useMemo(() => {
-    const list = reviews.filter((r) =>
+    const list = reviews.filter((r) => r.announcement ? (!filter && !sizeFilter && (!photosOnly || r.images.length > 0)) :
       (!filter || r.rating === filter) &&
       (!photosOnly || r.images.length > 0) &&
       (!sizeFilter || (r.bio.size ?? "").trim().toUpperCase() === sizeFilter));
-    return list.sort((a, b) =>
+    return list.sort((a, b) => Number(!!b.announcement) - Number(!!a.announcement) ||
       sort === "high" ? b.rating - a.rating : sort === "low" ? a.rating - b.rating
         : sort === "helpful" ? b.helpful - a.helpful : b.date.localeCompare(a.date));
   }, [reviews, sort, filter, photosOnly, sizeFilter]);
@@ -586,15 +642,18 @@ export function ProductReviews({ initialReviews = SEED, currentUser = null }: { 
     <section className="mx-auto w-full max-w-5xl space-y-6 font-sans text-foreground" aria-labelledby="reviews-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 id="reviews-heading" className="font-display text-3xl font-extrabold uppercase tracking-wide">Reviews</h2>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" className="accent-primary" checked={adminMode} onChange={(e) => setAdminMode(e.target.checked)} />
-          Demo: reply as Shop Admin
-        </label>
       </div>
 
-      <Summary reviews={reviews} onWrite={() => setShowForm(true)} filter={filter} setFilter={setFilter} />
+      <Summary reviews={reviews} writeLabel={adminMode ? "Post announcement" : undefined} onWrite={() => setShowForm(true)} filter={filter} setFilter={setFilter} />
 
-      {showForm && (
+      {showForm && adminMode && (
+        <AnnouncementForm onCancel={() => setShowForm(false)} onSubmit={(title, text) => {
+          setReviews((p) => [{ id: uid(), name: "Store Team", authorId: viewerId, verified: false, rating: 0, date: today(), title, comment: text,
+            helpful: 0, images: [], fabric: {}, bio: {}, shipper: [], replies: [], announcement: true }, ...p]);
+          setShowForm(false); toast.success("Announcement posted.");
+        }} />
+      )}
+      {showForm && !adminMode && (
         <ReviewForm signedInName={currentUser?.name} defaultName={guestName} onCancel={() => setShowForm(false)} onSubmit={(f) => {
           const name = currentUser?.name || f.name.trim() || "Anonymous";
           if (!currentUser && f.name.trim()) setGuestName(f.name.trim());
