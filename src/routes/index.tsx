@@ -38,7 +38,7 @@ function Index() {
           <option value="admin">Shop admin</option>
         </select>
       </div>
-      <ProductReviews currentUser={PREVIEW_USERS[who]} />
+      <ProductReviews currentUser={PREVIEW_USERS[who] ?? null} />
       <Toaster position="bottom-center" />
     </main>
   );

@@ -551,7 +551,7 @@ function AnnouncementForm({ onSubmit, onCancel }: { onSubmit: (title: string, te
   const [text, setText] = useState("");
   return (
     <form className="space-y-3 rounded-lg border border-admin/20 bg-card p-6 shadow-sm"
-      onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return toast.error("Write a message first."); onSubmit(title.trim(), text.trim()); }}>
+      onSubmit={(e) => { e.preventDefault(); if (!text.trim()) { toast.error("Write a message first."); return; } onSubmit(title.trim(), text.trim()); }}>
       <div className="flex items-center gap-2"><Megaphone className="h-5 w-5" /><h3 className="font-display text-xl font-bold uppercase tracking-wide">Post an announcement</h3></div>
       <p className="text-sm text-muted-foreground">Shown at the top with a Shop Admin badge. No rating — it won't affect the score.</p>
       <input className={inputCls} placeholder="Title (optional)" maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} />
